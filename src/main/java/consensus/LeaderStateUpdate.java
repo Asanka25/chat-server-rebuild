@@ -5,14 +5,14 @@ import messaging.ServerMessage;
 import models.Server;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
-import server.ServerState;
+import models.CurrentServer;
 import services.LeaderServices;
 
 import java.util.List;
 
 public class LeaderStateUpdate extends Thread {
 
-    int numberOfServersWithLowerIds = ServerState.getInstance().getSelfID() - 1;
+    int numberOfServersWithLowerIds = CurrentServer.getInstance().getSelfID() - 1;
     int numberOfUpdatesReceived = 0;
     volatile boolean leaderUpdateInProgress = true;
 
@@ -30,8 +30,8 @@ public class LeaderStateUpdate extends Thread {
                     FastBully.leaderUpdateComplete = true;
 
                     // add self clients and chat rooms to leader state
-                    List<String> selfClients = ServerState.getInstance().getClientIdList();
-                    List<List<String>> selfRooms = ServerState.getInstance().getChatRoomList();
+                    List<String> selfClients = CurrentServer.getInstance().getClientIdList();
+                    List<List<String>> selfRooms = CurrentServer.getInstance().getChatRoomList();
 
                     for( String clientID : selfClients ) {
                         LeaderServices.getInstance().addClientLeaderUpdate(clientID);
@@ -45,13 +45,13 @@ public class LeaderStateUpdate extends Thread {
                             ", rooms: " + LeaderServices.getInstance().getRoomIDList());
 
                     // send update complete message to other servers
-                    for ( int key : ServerState.getInstance().getServers().keySet() ) {
-                        if ( key != ServerState.getInstance().getSelfID() ){
-                            Server destServer = ServerState.getInstance().getServers().get(key);
+                    for ( int key : CurrentServer.getInstance().getServers().keySet() ) {
+                        if ( key != CurrentServer.getInstance().getSelfID() ){
+                            Server destServer = CurrentServer.getInstance().getServers().get(key);
 
                             try {
                                 CoordinationServices.sendServer(
-                                        ServerMessage.getLeaderStateUpdateComplete( String.valueOf(ServerState.getInstance().getSelfID()) ),
+                                        ServerMessage.getLeaderStateUpdateComplete( String.valueOf(CurrentServer.getInstance().getSelfID()) ),
                                         destServer
                                 );
                                 System.out.println("INFO : Sent leader update complete message to s"+destServer.getServerID());

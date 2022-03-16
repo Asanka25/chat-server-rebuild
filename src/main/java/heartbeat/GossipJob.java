@@ -8,7 +8,7 @@ import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
 import models.Server;
-import server.ServerState;
+import models.CurrentServer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -17,7 +17,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import static services.CoordinationServices.sendServer;
 
 public class GossipJob implements Job{
-    private ServerState serverState = ServerState.getInstance();
+    private CurrentServer currentServer = CurrentServer.getInstance();
     private LeaderServices leaderServices = LeaderServices.getInstance();
     private ServerMessage serverMessage = ServerMessage.getInstance();
 
@@ -29,34 +29,34 @@ public class GossipJob implements Job{
 
         // first work on heart beat vector and suspect failure server list
 
-        for (Server serverInfo : serverState.getServers().values()){
+        for (Server serverInfo : currentServer.getServers().values()){
             Integer serverId = serverInfo.getServerID();
-            Integer myServerId = serverState.getSelfID();
+            Integer myServerId = currentServer.getSelfID();
 
             // get current heart beat count of a server
-            Integer count = serverState.getHeartbeatCountList().get(serverId);
+            Integer count = currentServer.getHeartbeatCountList().get(serverId);
 
             // first update heart beat count vector
             if (serverId.equals(myServerId)) {
-                serverState.getHeartbeatCountList().put(serverId, 0); // reset my own vector always
+                currentServer.getHeartbeatCountList().put(serverId, 0); // reset my own vector always
             } else {
                 // up count all others
                 if (count == null) {
-                    serverState.getHeartbeatCountList().put(serverId, 1);
+                    currentServer.getHeartbeatCountList().put(serverId, 1);
                 } else {
-                    serverState.getHeartbeatCountList().put(serverId, count + 1);
+                    currentServer.getHeartbeatCountList().put(serverId, count + 1);
                 }
             }
 
             // FIX get the fresh updated current count again
-            count = serverState.getHeartbeatCountList().get(serverId);
+            count = currentServer.getHeartbeatCountList().get(serverId);
 
             if (count != null) {
                 // if heart beat count is more than error factor
                 if (count > Integer.parseInt(aliveErrorFactor)) {
-                    serverState.getSuspectList().put(serverId, "SUSPECTED");
+                    currentServer.getSuspectList().put(serverId, "SUSPECTED");
                 } else {
-                    serverState.getSuspectList().put(serverId, "NOT_SUSPECTED");
+                    currentServer.getSuspectList().put(serverId, "NOT_SUSPECTED");
                 }
             }
 
@@ -79,16 +79,16 @@ public class GossipJob implements Job{
 
         // finally gossip about heart beat vector to a next peer
 
-        int numOfServers = serverState.getServers().size();
+        int numOfServers = currentServer.getServers().size();
 
         if (numOfServers > 1) { // Gossip required at least 2 servers to be up
 
             // after updating the heartbeatCountList, randomly select a server and send
             Integer serverIndex = ThreadLocalRandom.current().nextInt(numOfServers - 1);
             ArrayList<Server> remoteServer = new ArrayList<>();
-            for (Server server : serverState.getServers().values()) {
+            for (Server server : currentServer.getServers().values()) {
                 Integer serverId = server.getServerID();
-                Integer myServerId = serverState.getSelfID();
+                Integer myServerId = currentServer.getSelfID();
                 if (!serverId.equals(myServerId)) {
                     remoteServer.add(server);
                 }
@@ -96,9 +96,9 @@ public class GossipJob implements Job{
 //            Collections.shuffle(remoteServer, new Random(System.nanoTime())); // another way of randomize the list
 
             // change concurrent hashmap to hashmap before sending
-            HashMap<Integer, Integer> heartbeatCountList = new HashMap<>(serverState.getHeartbeatCountList());
+            HashMap<Integer, Integer> heartbeatCountList = new HashMap<>(currentServer.getHeartbeatCountList());
             JSONObject gossipMessage = new JSONObject();
-            gossipMessage = serverMessage.gossipMessage(serverState.getSelfID(), heartbeatCountList);
+            gossipMessage = serverMessage.gossipMessage(currentServer.getSelfID(), heartbeatCountList);
             try {
                 sendServer(gossipMessage,remoteServer.get(serverIndex));
                 System.out.println("INFO : Gossip heartbeat info to next peer s"+remoteServer.get(serverIndex).getServerID());
@@ -113,7 +113,7 @@ public class GossipJob implements Job{
 
     public static void receiveMessages(JSONObject j_object) {
 
-        ServerState serverState = ServerState.getInstance();
+        CurrentServer currentServer = CurrentServer.getInstance();
 
         HashMap<String, Long> gossipFromOthers = (HashMap<String, Long>) j_object.get("heartbeatCountList");
         Integer fromServer = (int) (long)j_object.get("serverId");
@@ -122,20 +122,20 @@ public class GossipJob implements Job{
 
         //update the heartbeatcountlist by taking minimum
         for (String serverId : gossipFromOthers.keySet()) {
-            Integer localHeartbeatCount = serverState.getHeartbeatCountList().get(Integer.parseInt(serverId));
+            Integer localHeartbeatCount = currentServer.getHeartbeatCountList().get(Integer.parseInt(serverId));
             Integer remoteHeartbeatCount = (int) (long)gossipFromOthers.get(serverId);
             if (localHeartbeatCount != null && remoteHeartbeatCount < localHeartbeatCount) {
-                serverState.getHeartbeatCountList().put(Integer.parseInt(serverId), remoteHeartbeatCount);
+                currentServer.getHeartbeatCountList().put(Integer.parseInt(serverId), remoteHeartbeatCount);
             }
         }
 
-        System.out.println(("Current cluster heart beat state is: " + serverState.getHeartbeatCountList()));
+        System.out.println(("Current cluster heart beat state is: " + currentServer.getHeartbeatCountList()));
 
-        if (LeaderServices.getInstance().isLeaderElected() && LeaderServices.getInstance().getLeaderID().equals(serverState.getSelfID())) {
-            if (serverState.getHeartbeatCountList().size() < gossipFromOthers.size()) {
+        if (LeaderServices.getInstance().isLeaderElected() && LeaderServices.getInstance().getLeaderID().equals(currentServer.getSelfID())) {
+            if (currentServer.getHeartbeatCountList().size() < gossipFromOthers.size()) {
                 for (String serverId : gossipFromOthers.keySet()) {
-                    if (!serverState.getHeartbeatCountList().containsKey(serverId)) {
-                        serverState.getSuspectList().put(Integer.parseInt(serverId), "SUSPECTED");
+                    if (!currentServer.getHeartbeatCountList().containsKey(serverId)) {
+                        currentServer.getSuspectList().put(Integer.parseInt(serverId), "SUSPECTED");
                     }
                 }
             }

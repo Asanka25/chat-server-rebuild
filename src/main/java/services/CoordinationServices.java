@@ -4,7 +4,7 @@ import models.Server;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
-import server.ServerState;
+import models.CurrentServer;
 
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -38,6 +38,14 @@ public class CoordinationServices {
             TEMP_OUT.flush();
         }
     }
+
+    //send message
+    public static void send(JSONObject obj, Socket socket) throws IOException {
+        DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
+        dataOutputStream.write((obj.toJSONString() + "\n").getBytes(StandardCharsets.UTF_8));
+        dataOutputStream.flush();
+    }
+
     //send message to client
     public static void sendClient(JSONObject obj, Socket socket) throws IOException {
         DataOutputStream dataOutputStream = new DataOutputStream(socket.getOutputStream());
@@ -68,7 +76,7 @@ public class CoordinationServices {
     //send message to leader server
     public static void sendToLeader(JSONObject obj) throws IOException
     {
-        Server destServer = ServerState.getInstance().getServers()
+        Server destServer = CurrentServer.getInstance().getServers()
                 .get( LeaderServices.getInstance().getLeaderID() );
         Socket socket = new Socket(destServer.getServerAddress(),
                 destServer.getCoordinationPort());

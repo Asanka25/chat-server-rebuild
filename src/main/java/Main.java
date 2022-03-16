@@ -6,7 +6,7 @@ import constants.Constant;
 import org.quartz.*;
 import org.quartz.impl.StdSchedulerFactory;
 import handlers.ServerHandlerThread;
-import server.ServerState;
+import models.CurrentServer;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -27,13 +27,13 @@ public class Main {
 //        Scanner scanner = new Scanner(System.in);
 //        String serverID = scanner.nextLine();  // Read user input
 //        System.out.println("LOG  : ARG[0] = " + args[0] + " ARG[1] = '" + args[1] + "'");
-        ServerState.getInstance().initializeWithConfigs("s3", "/home/dilanka_rathnasiri/Documents/chat-server-rebuild/server_conf.txt");
+        CurrentServer.getInstance().initializeWithConfigs("s3", "/home/dilanka_rathnasiri/Documents/chat-server-rebuild/server_conf.txt");
 
         System.out.println("LOG  : ------server started------");
 
         try {
             // throw exception if invalid server id provided
-            if( ServerState.getInstance().getServerAddress() == null ) {
+            if( CurrentServer.getInstance().getServerAddress() == null ) {
                 throw new IllegalArgumentException();
             }
 
@@ -46,7 +46,7 @@ public class Main {
             // bind SocketAddress with inetAddress and port
             SocketAddress endPointCoordination = new InetSocketAddress(
                     "0.0.0.0",//ServerState.getInstance().getServerAddress()
-                    ServerState.getInstance().getCoordinationPort()
+                    CurrentServer.getInstance().getCoordinationPort()
             );
             serverCoordinationSocket.bind( endPointCoordination );
             System.out.println( serverCoordinationSocket.getLocalSocketAddress() );
@@ -62,7 +62,7 @@ public class Main {
             // bind SocketAddress with inetAddress and port
             SocketAddress endPointClient = new InetSocketAddress(
                     "0.0.0.0",//ServerState.getInstance().getServerAddress()
-                    ServerState.getInstance().getClientsPort()
+                    CurrentServer.getInstance().getClientsPort()
             );
             serverClientsSocket.bind(endPointClient);
             System.out.println(serverClientsSocket.getLocalSocketAddress());
@@ -103,7 +103,7 @@ public class Main {
             while (true) {
                 ClientThreadHandler clientThreadHandler = new ClientThreadHandler(serverClientsSocket.accept());
                 // starting the thread
-                ServerState.getInstance().addClientHandlerThreadToMap(clientThreadHandler);
+                CurrentServer.getInstance().addClientHandlerThreadToMap(clientThreadHandler);
                 clientThreadHandler.start();
             }
         }

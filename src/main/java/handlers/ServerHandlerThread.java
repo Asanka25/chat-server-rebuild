@@ -10,7 +10,7 @@ import models.Client;
 import models.Server;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
-import server.ServerState;
+import models.CurrentServer;
 import services.LeaderServices;
 
 import java.io.BufferedReader;
@@ -60,11 +60,11 @@ public class ServerHandlerThread extends Thread {
                         boolean approved = !LeaderServices.getInstance().isClientRegistered(clientID);
                         if (approved) {
                             Client client = new Client(clientID,
-                                    ServerState.getMainHallIDbyServerInt(sender),
+                                    CurrentServer.getMainHallIDbyServerInt(sender),
                                     null);
                             LeaderServices.getInstance().addClient(client);
                         }
-                        Server destServer = ServerState.getInstance().getServers()
+                        Server destServer = CurrentServer.getInstance().getServers()
                                 .get(sender);
                         try {
                             // send client id approval reply to sender
@@ -85,7 +85,7 @@ public class ServerHandlerThread extends Thread {
                         int approved = Boolean.parseBoolean(j_object.get("approved").toString()) ? 1 : 0;
                         Long threadID = Long.parseLong(j_object.get("threadid").toString());
 
-                        ClientThreadHandler clientThreadHandler = ServerState.getInstance()
+                        ClientThreadHandler clientThreadHandler = CurrentServer.getInstance()
                                 .getClientHandlerThread(threadID);
                         clientThreadHandler.setApprovedClientID(approved);
                         Object lock = clientThreadHandler.getLock();
@@ -106,7 +106,7 @@ public class ServerHandlerThread extends Thread {
                         if (approved) {
                             LeaderServices.getInstance().addApprovedRoom(clientID, roomID, sender);
                         }
-                        Server destServer = ServerState.getInstance().getServers()
+                        Server destServer = CurrentServer.getInstance().getServers()
                                 .get(sender);
                         try {
                             // send room create approval reply to sender
@@ -126,7 +126,7 @@ public class ServerHandlerThread extends Thread {
                         int approved = Boolean.parseBoolean(j_object.get("approved").toString()) ? 1 : 0;
                         Long threadID = Long.parseLong(j_object.get("threadid").toString());
 
-                        ClientThreadHandler clientThreadHandler = ServerState.getInstance()
+                        ClientThreadHandler clientThreadHandler = CurrentServer.getInstance()
                                 .getClientHandlerThread(threadID);
                         clientThreadHandler.setApprovedRoomCreation(approved);
                         Object lock = clientThreadHandler.getLock();
@@ -153,14 +153,14 @@ public class ServerHandlerThread extends Thread {
                         } else {
                             int serverIDofTargetRoom = LeaderServices.getInstance().getServerIdIfRoomExist(roomID);
 
-                            Server destServer = ServerState.getInstance().getServers().get(sender);
+                            Server destServer = CurrentServer.getInstance().getServers().get(sender);
                             try {
 
                                 boolean approved = serverIDofTargetRoom != -1;
                                 if (approved) {
                                     LeaderServices.getInstance().removeClient(clientID, formerRoomID);//remove before route, later add on move join
                                 }
-                                Server serverOfTargetRoom = ServerState.getInstance().getServers().get(serverIDofTargetRoom);
+                                Server serverOfTargetRoom = CurrentServer.getInstance().getServers().get(serverIDofTargetRoom);
 
                                 String host = (approved) ? serverOfTargetRoom.getServerAddress() : "";
                                 String port = (approved) ? String.valueOf(serverOfTargetRoom.getClientsPort()) : "";
@@ -186,7 +186,7 @@ public class ServerHandlerThread extends Thread {
                         String host = j_object.get("host").toString();
                         String port = j_object.get("port").toString();
 
-                        ClientThreadHandler clientThreadHandler = ServerState.getInstance()
+                        ClientThreadHandler clientThreadHandler = CurrentServer.getInstance()
                                 .getClientHandlerThread(threadID);
 
                         Object lock = clientThreadHandler.getLock();
@@ -221,7 +221,7 @@ public class ServerHandlerThread extends Thread {
                         String threadID = j_object.get("threadid").toString();
                         int sender = Integer.parseInt(j_object.get("sender").toString());
 
-                        Server destServer = ServerState.getInstance().getServers().get(sender);
+                        Server destServer = CurrentServer.getInstance().getServers().get(sender);
 
                         CoordinationServices.sendServer(
                                 ServerMessage.getListResponse(LeaderServices.getInstance().getRoomIDList(), threadID),
@@ -233,7 +233,7 @@ public class ServerHandlerThread extends Thread {
                         JSONArray roomsJSONArray = (JSONArray) j_object.get("rooms");
                         ArrayList<String> roomIDList = new ArrayList(roomsJSONArray);
 
-                        ClientThreadHandler clientThreadHandler = ServerState.getInstance()
+                        ClientThreadHandler clientThreadHandler = CurrentServer.getInstance()
                                 .getClientHandlerThread(threadID);
 
                         Object lock = clientThreadHandler.getLock();

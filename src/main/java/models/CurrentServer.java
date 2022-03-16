@@ -1,7 +1,6 @@
-package server;
+package models;
 
 import handlers.ClientThreadHandler;
-import models.Server;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -12,7 +11,7 @@ import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class ServerState {
+public class CurrentServer {
     private String serverID;
     private int selfID;
     private String serverAddress = null;
@@ -36,20 +35,20 @@ public class ServerState {
     private final ConcurrentHashMap<String, Room> roomMap = new ConcurrentHashMap<>();  // maintain local room object list <roomID,roomObject>
 
     //singleton
-    private static ServerState serverStateInstance;
+    private static CurrentServer currentServerInstance;
 
-    private ServerState() {
+    private CurrentServer() {
     }
 
-    public static ServerState getInstance() {
-        if (serverStateInstance == null) {
-            synchronized (ServerState.class) {
-                if (serverStateInstance == null) {
-                    serverStateInstance = new ServerState();//instance will be created at request time
+    public static CurrentServer getInstance() {
+        if (currentServerInstance == null) {
+            synchronized (CurrentServer.class) {
+                if (currentServerInstance == null) {
+                    currentServerInstance = new CurrentServer();//instance will be created at request time
                 }
             }
         }
-        return serverStateInstance;
+        return currentServerInstance;
     }
 
     public void initializeWithConfigs(String serverID, String serverConfPath) {
@@ -98,7 +97,7 @@ public class ServerState {
     public boolean isClientIDAlreadyTaken(String clientID) {
         for (Map.Entry<String, Room> entry : this.getRoomMap().entrySet()) {
             Room room = entry.getValue();
-            if (room.getClientStateMap().containsKey(clientID)) return true;
+            if (room.getParticipantsMap().containsKey(clientID)) return true;
         }
         return false;
     }
@@ -107,7 +106,7 @@ public class ServerState {
     public List<String> getClientIdList() {
         List<String> clientIdList = new ArrayList<>();
         roomMap.forEach((roomID, room) -> {
-            clientIdList.addAll(room.getClientStateMap().keySet());
+            clientIdList.addAll(room.getParticipantsMap().keySet());
         });
         return clientIdList;
     }

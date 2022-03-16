@@ -4,7 +4,7 @@ import services.CoordinationServices;
 import messaging.ServerMessage;
 import models.Server;
 import org.json.simple.JSONObject;
-import server.ServerState;
+import models.CurrentServer;
 import services.LeaderServices;
 
 import java.io.IOException;
@@ -47,7 +47,7 @@ public class FastBully implements Runnable {
                     if( !receivedOk )
                     {
                         // OK not received. Set self as leader
-                        LeaderServices.getInstance().setLeaderID( ServerState.getInstance().getSelfID() );
+                        LeaderServices.getInstance().setLeaderID( CurrentServer.getInstance().getSelfID() );
                         electionInProgress = false; // allow another election request to come in
                         leaderFlag = true;
                         System.out.println( "INFO : Server s" + LeaderServices.getInstance().getLeaderID()
@@ -79,13 +79,13 @@ public class FastBully implements Runnable {
                 while( true ) {
                     try {
                         Thread.sleep(10);
-                        if( leaderFlag && ServerState.getInstance().getSelfID() != LeaderServices.getInstance().getLeaderID() ) {
+                        if( leaderFlag && CurrentServer.getInstance().getSelfID() != LeaderServices.getInstance().getLeaderID() ) {
                             Thread.sleep( 1500 );
-                            Server destServer = ServerState.getInstance().getServers()
+                            Server destServer = CurrentServer.getInstance().getServers()
                                     .get( LeaderServices.getInstance().getLeaderID() );
 
                             CoordinationServices.sendServer(
-                                    ServerMessage.getHeartbeat( String.valueOf(ServerState.getInstance().getSelfID()) ),
+                                    ServerMessage.getHeartbeat( String.valueOf(CurrentServer.getInstance().getSelfID()) ),
                                     destServer
                             );
                             //System.out.println( "INFO : Sent heartbeat to leader s" + destServer.getServerID() );
@@ -137,13 +137,13 @@ public class FastBully implements Runnable {
      */
     public static void sendCoordinatorMsg() {
         int numberOfRequestsNotSent = 0;
-        for ( int key : ServerState.getInstance().getServers().keySet() ) {
-            if ( key != ServerState.getInstance().getSelfID() ){
-                Server destServer = ServerState.getInstance().getServers().get(key);
+        for ( int key : CurrentServer.getInstance().getServers().keySet() ) {
+            if ( key != CurrentServer.getInstance().getSelfID() ){
+                Server destServer = CurrentServer.getInstance().getServers().get(key);
 
                 try {
                     CoordinationServices.sendServer(
-                            ServerMessage.getCoordinator( String.valueOf(ServerState.getInstance().getSelfID()) ),
+                            ServerMessage.getCoordinator( String.valueOf(CurrentServer.getInstance().getSelfID()) ),
                             destServer
                     );
                     System.out.println("INFO : Sent leader ID to s"+destServer.getServerID());
@@ -155,10 +155,10 @@ public class FastBully implements Runnable {
                 }
             }
         }
-        if( numberOfRequestsNotSent == ServerState.getInstance().getServers().size()-1 ) {
+        if( numberOfRequestsNotSent == CurrentServer.getInstance().getServers().size()-1 ) {
             // add self clients and chat rooms to leader state
-            List<String> selfClients = ServerState.getInstance().getClientIdList();
-            List<List<String>> selfRooms = ServerState.getInstance().getChatRoomList();
+            List<String> selfClients = CurrentServer.getInstance().getClientIdList();
+            List<List<String>> selfRooms = CurrentServer.getInstance().getChatRoomList();
 
             for( String clientID : selfClients ) {
                 LeaderServices.getInstance().addClientLeaderUpdate( clientID );
@@ -177,9 +177,9 @@ public class FastBully implements Runnable {
      */
     public static void sendOK() {
         try {
-            Server destServer = ServerState.getInstance().getServers().get(sourceID);
+            Server destServer = CurrentServer.getInstance().getServers().get(sourceID);
             CoordinationServices.sendServer(
-                    ServerMessage.getOk( String.valueOf(ServerState.getInstance().getSelfID()) ),
+                    ServerMessage.getOk( String.valueOf(CurrentServer.getInstance().getSelfID()) ),
                     destServer
             );
             System.out.println("INFO : Sent OK to s"+destServer.getServerID());
@@ -196,12 +196,12 @@ public class FastBully implements Runnable {
     {
         System.out.println("INFO : Election initiated");
         int numberOfFailedRequests = 0;
-        for ( int key : ServerState.getInstance().getServers().keySet() ) {
-            if( key > ServerState.getInstance().getSelfID() ){
-                Server destServer = ServerState.getInstance().getServers().get(key);
+        for ( int key : CurrentServer.getInstance().getServers().keySet() ) {
+            if( key > CurrentServer.getInstance().getSelfID() ){
+                Server destServer = CurrentServer.getInstance().getServers().get(key);
                 try {
                      CoordinationServices.sendServer(
-                            ServerMessage.getElection( String.valueOf(ServerState.getInstance().getSelfID()) ),
+                            ServerMessage.getElection( String.valueOf(CurrentServer.getInstance().getSelfID()) ),
                             destServer
                     );
                     System.out.println("INFO : Sent election request to s"+destServer.getServerID());
@@ -214,7 +214,7 @@ public class FastBully implements Runnable {
             }
 
         }
-        if (numberOfFailedRequests == ServerState.getInstance().getNumberOfServersWithHigherIds()) {
+        if (numberOfFailedRequests == CurrentServer.getInstance().getNumberOfServersWithHigherIds()) {
             if(!electionInProgress){
                 //startTime=System.currentTimeMillis();
                 electionInProgress = true;
@@ -233,7 +233,7 @@ public class FastBully implements Runnable {
                 sourceID = Integer.parseInt(j_object.get( "source" ).toString());
                 System.out.println( "INFO : Received election request from s" + sourceID );
 
-                if( ServerState.getInstance().getSelfID() > sourceID ) {
+                if( CurrentServer.getInstance().getSelfID() > sourceID ) {
                     Runnable sender = new FastBully( "Sender", "ok" );
                     new Thread( sender ).start();
                 }
@@ -271,8 +271,8 @@ public class FastBully implements Runnable {
                 {
                     CoordinationServices.sendToLeader(
                             ServerMessage.getLeaderStateUpdate(
-                                    ServerState.getInstance().getClientIdList(),
-                                    ServerState.getInstance().getChatRoomList()
+                                    CurrentServer.getInstance().getClientIdList(),
+                                    CurrentServer.getInstance().getChatRoomList()
                             )
                     );
                 } catch( IOException e ) {

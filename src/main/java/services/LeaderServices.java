@@ -2,12 +2,13 @@ package services; //LeaderState
 
 import models.Client;
 import consensus.FastBully;
-import server.Room;
-import server.ServerState;
+import models.Room;
+import models.CurrentServer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class LeaderServices {
     private Integer leaderID;
@@ -32,7 +33,7 @@ public class LeaderServices {
     }
 
     public boolean isLeader() {
-        return ServerState.getInstance().getSelfID() == LeaderServices.getInstance().getLeaderID();
+        return CurrentServer.getInstance().getSelfID() == LeaderServices.getInstance().getLeaderID();
     }
 
     public boolean isLeaderElected() {
@@ -40,7 +41,7 @@ public class LeaderServices {
     }
 
     public boolean isLeaderElectedAndIamLeader() {
-        return (FastBully.leaderFlag && ServerState.getInstance().getSelfID() == LeaderServices.getInstance().getLeaderID());
+        return (FastBully.leaderFlag && CurrentServer.getInstance().getSelfID() == LeaderServices.getInstance().getLeaderID());
     }
 
     public boolean isLeaderElectedAndMessageFromLeader(int serverID) {
@@ -90,13 +91,13 @@ public class LeaderServices {
     }
 
     public void removeRoom(String roomID, String mainHallID, String ownerID) {
-        HashMap<String, Client> formerClientStateMap = this.activeChatRooms.get(roomID).getClientStateMap();
+        ConcurrentHashMap<String, Client> formerClientStateMap = this.activeChatRooms.get(roomID).getParticipantsMap();
         Room mainHall = this.activeChatRooms.get(mainHallID);
 
         //update client room to main hall , add clients to main hall
         formerClientStateMap.forEach((clientID, client) -> {
             client.setRoomID(mainHallID);
-            mainHall.getClientStateMap().put(client.getClientID(), client);
+            mainHall.getParticipantsMap().put(client.getClientID(), client);
         });
 
         //set to room owner false, remove room from map
@@ -105,9 +106,9 @@ public class LeaderServices {
     }
 
     public void addServerDefaultMainHalls(){
-        ServerState.getInstance().getServers()
+        CurrentServer.getInstance().getServers()
                 .forEach((serverID, server) -> {
-                    String roomID = ServerState.getMainHallIDbyServerInt(serverID);
+                    String roomID = CurrentServer.getMainHallIDbyServerInt(serverID);
                     this.activeChatRooms.put(roomID, new Room("", roomID, serverID));
                 });
     }
@@ -150,7 +151,7 @@ public class LeaderServices {
         for (String entry : activeChatRooms.keySet()) {
             Room remoteRoom = activeChatRooms.get(entry);
             if(remoteRoom.getServerID()==serverId){
-                for(String client : remoteRoom.getClientStateMap().keySet()){
+                for(String client : remoteRoom.getParticipantsMap().keySet()){
                     activeClients.remove(client);
                 }
                 activeChatRooms.remove(entry);
