@@ -49,7 +49,7 @@ public class LeaderServices {
     }
 
     public boolean isClientRegistered(String clientID) {
-        return activeClients.contains(clientID); //todo: end here
+        return activeClients.contains(clientID);
     }
 
     public void resetLeader() {
@@ -76,8 +76,17 @@ public class LeaderServices {
         addClient(client);
     }
 
-    public boolean isRoomCreationApproved( String roomID ) {
-        return !(activeChatRooms.containsKey( roomID ));
+    public boolean isRoomCreated(String roomID) {
+        return activeChatRooms.containsKey(roomID);
+    }
+
+    public void addApprovedRoom(Room room) {
+        activeChatRooms.put(room.getRoomID(), room);
+
+        //add client to the new room
+        Client client = new Client(room.getOwnerIdentity(), room.getRoomID(), null);
+        client.setRoomOwner(true);
+        room.addParticipants(client);
     }
 
     public void addApprovedRoom(String clientID, String roomID, int serverID) {
