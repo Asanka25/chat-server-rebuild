@@ -101,7 +101,7 @@ public class ServerHandlerThread extends Thread {
                         int sender = Integer.parseInt(j_object.get("sender").toString());
                         String threadID = j_object.get("threadid").toString();
 
-                        boolean approved = LeaderServices.getInstance().isRoomCreated(roomID);
+                        boolean approved = !LeaderServices.getInstance().isRoomCreated(roomID);
 
                         if (approved) {
                             LeaderServices.getInstance().addApprovedRoom(clientID, roomID, sender);

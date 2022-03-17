@@ -230,7 +230,8 @@ public class ClientThreadHandler extends Thread{
         // if self is leader get list direct from leader state
         if (LeaderServices.getInstance().isLeader()) {
             roomsListTemp = LeaderServices.getInstance().getRoomIDList();
-        } else { // send list request to leader
+        }
+        else { // send list request to leader
             sendToLeader(
                     ServerMessage.getListRequest(
                             client.getClientID(),

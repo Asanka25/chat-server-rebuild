@@ -1,5 +1,7 @@
 package services; //LeaderState
 
+import daos.ClientDao;
+import daos.RoomDao;
 import models.Client;
 import consensus.FastBully;
 import models.Room;
@@ -12,11 +14,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class LeaderServices {
     private Integer leaderID;
+    private ClientDao clientDao;
+    private RoomDao roomDao;
 
-    private final List<String> activeClients = new ArrayList<>();
-    private final HashMap<String, Room> activeChatRooms = new HashMap<>(); // <roomID, room obj>
-
-    private LeaderServices() {}
+    private LeaderServices() {
+        clientDao = ClientDao.getInstance();
+        roomDao = RoomDao.getInstance();
+    }
 
     private static LeaderServices leaderServicesInstance;
 
@@ -25,7 +29,6 @@ public class LeaderServices {
             synchronized (LeaderServices.class) {
                 if (leaderServicesInstance == null) {
                     leaderServicesInstance = new LeaderServices();
-//                    leaderStateInstance.addServerDefaultMainHalls();
                 }
             }
         }
@@ -49,26 +52,26 @@ public class LeaderServices {
     }
 
     public boolean isClientRegistered(String clientID) {
-        return activeClients.contains(clientID);
+        return clientDao.getClients().contains(clientID);
     }
 
     public void resetLeader() {
-        activeClients.clear();
-        activeChatRooms.clear();
+        clientDao.getClients().clear();
+        roomDao.getChatRooms().clear();
     }
 
     public void addClient(Client client) {
-        activeClients.add(client.getClientID());
-        activeChatRooms.get(client.getRoomID()).addParticipants(client);
+        clientDao.getClients().add(client.getClientID());
+        roomDao.getChatRooms().get(client.getRoomID()).addParticipants(client);
     }
 
     public void addClientLeaderUpdate(String clientID) {
-        activeClients.add(clientID);
+        clientDao.getClients().add(clientID);
     }
 
     public void removeClient(String clientID, String formerRoomID) {
-        activeClients.remove(clientID);
-        activeChatRooms.get(formerRoomID).removeParticipants(clientID);
+        clientDao.getClients().remove(clientID);
+        roomDao.getChatRooms().get(formerRoomID).removeParticipants(clientID);
     }
 
     public void localJoinRoomClient(Client client, String formerRoomID) {
@@ -77,11 +80,11 @@ public class LeaderServices {
     }
 
     public boolean isRoomCreated(String roomID) {
-        return activeChatRooms.containsKey(roomID);
+        return roomDao.getChatRooms().containsKey(roomID);
     }
 
     public void addApprovedRoom(Room room) {
-        activeChatRooms.put(room.getRoomID(), room);
+        roomDao.getChatRooms().put(room.getRoomID(), room);
 
         //add client to the new room
         Client client = new Client(room.getOwnerIdentity(), room.getRoomID(), null);
@@ -91,7 +94,7 @@ public class LeaderServices {
 
     public void addApprovedRoom(String clientID, String roomID, int serverID) {
         Room room = new Room(clientID, roomID, serverID);
-        activeChatRooms.put(roomID, room);
+        roomDao.getChatRooms().put(roomID, room);
 
         //add client to the new room
         Client client = new Client(clientID, roomID, null);
@@ -100,8 +103,8 @@ public class LeaderServices {
     }
 
     public void removeRoom(String roomID, String mainHallID, String ownerID) {
-        ConcurrentHashMap<String, Client> formerClientStateMap = this.activeChatRooms.get(roomID).getParticipantsMap();
-        Room mainHall = this.activeChatRooms.get(mainHallID);
+        ConcurrentHashMap<String, Client> formerClientStateMap = roomDao.getChatRooms().get(roomID).getParticipantsMap();
+        Room mainHall = roomDao.getChatRooms().get(mainHallID);
 
         //update client room to main hall , add clients to main hall
         formerClientStateMap.forEach((clientID, client) -> {
@@ -111,26 +114,26 @@ public class LeaderServices {
 
         //set to room owner false, remove room from map
         formerClientStateMap.get(ownerID).setRoomOwner(false);
-        this.activeChatRooms.remove(roomID);
+        roomDao.getChatRooms().remove(roomID);
     }
 
     public void addServerDefaultMainHalls(){
         CurrentServer.getInstance().getServers()
                 .forEach((serverID, server) -> {
                     String roomID = CurrentServer.getMainHallIDbyServerInt(serverID);
-                    this.activeChatRooms.put(roomID, new Room("", roomID, serverID));
+                    roomDao.getChatRooms().put(roomID, new Room("", roomID, serverID));
                 });
     }
 
     public void removeApprovedRoom(String roomID) {
         //TODO : move clients already in room (update server state) on delete
-        activeChatRooms.remove( roomID );
+        roomDao.getChatRooms().remove( roomID );
     }
 
 
     public int getServerIdIfRoomExist(String roomID) {
-        if (this.activeChatRooms.containsKey(roomID)) {
-            Room targetRoom = activeChatRooms.get(roomID);
+        if (roomDao.getChatRooms().containsKey(roomID)) {
+            Room targetRoom = roomDao.getChatRooms().get(roomID);
             return targetRoom.getServerID();
         } else {
             return -1;
@@ -148,22 +151,22 @@ public class LeaderServices {
     }
 
     public ArrayList<String> getRoomIDList() {
-        return new ArrayList<>(this.activeChatRooms.keySet());
+        return new ArrayList<>(roomDao.getChatRooms().keySet());
     }
 
     public List<String> getClientIDList() {
-        return this.activeClients;
+        return clientDao.getClients();
     }
 
     //remove all rooms and clients by server ID
     public void removeRemoteChatRoomsClientsByServerId(Integer serverId) {
-        for (String entry : activeChatRooms.keySet()) {
-            Room remoteRoom = activeChatRooms.get(entry);
+        for (String entry : roomDao.getChatRooms().keySet()) {
+            Room remoteRoom = roomDao.getChatRooms().get(entry);
             if(remoteRoom.getServerID()==serverId){
                 for(String client : remoteRoom.getParticipantsMap().keySet()){
-                    activeClients.remove(client);
+                    clientDao.getClients().remove(client);
                 }
-                activeChatRooms.remove(entry);
+                roomDao.getChatRooms().remove(entry);
             }
         }
 
