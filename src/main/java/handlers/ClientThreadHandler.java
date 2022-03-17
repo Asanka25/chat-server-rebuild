@@ -426,7 +426,9 @@ public class ClientThreadHandler extends Thread{
             System.out.println("WARN : Join room denied, Client" + client.getClientID() + " Owns a room");
             messageSend(null, msgCtx.setMessageType(CLIENT_MSG_TYPE.JOIN_ROOM));
 
-        } else if (CurrentServer.getInstance().getRoomMap().containsKey(roomID)) { //local room change
+        }
+        else if (CurrentServer.getInstance().getRoomMap().containsKey(roomID)) {
+            //local room change
             //TODO : check sync
             client.setRoomID(roomID);
             CurrentServer.getInstance().getRoomMap().get(formerRoomID).removeParticipants(client.getClientID());
@@ -474,7 +476,9 @@ public class ClientThreadHandler extends Thread{
                 );
             }
 
-        } else { //global room change
+        }
+        else {
+            //global room change
 
             while (!LeaderServices.getInstance().isLeaderElected()) {
                 Thread.sleep(1000);
@@ -733,24 +737,25 @@ public class ClientThreadHandler extends Thread{
     }
 
     //message
-    private void message(String content) throws IOException {
+    private void message(String content) {
         String clientID = client.getClientID();
         String roomid = client.getRoomID();
 
-        ConcurrentHashMap<String, Client> clientList = CurrentServer.getInstance().getRoomMap().get(roomid).getParticipantsMap();
+        JSONObject message = new JSONObject();
+        message.put("type", "message");
+        message.put("identity", clientID);
+        message.put("content", content);
 
-        //create broadcast list
-        ArrayList<Socket> socketsList = new ArrayList<>();
-        for (String each:clientList.keySet()){
-            if (!clientList.get(each).getClientID().equals(clientID)){
-                socketsList.add(clientList.get(each).getSocket());
+
+        CurrentServer.getInstance().getRoomMap().get(roomid).getParticipantsMap().forEach((k, v) -> {
+            if (!k.equals(clientID)) {
+                try {
+                    send(message, v.getSocket());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
-        }
-        ClientMessageContext msgCtx = new ClientMessageContext()
-                .setClientID(clientID)
-                .setBody(content);
-
-        messageSend(socketsList, msgCtx.setMessageType(CLIENT_MSG_TYPE.MESSAGE));
+        });
     }
 
 
@@ -786,10 +791,7 @@ public class ClientThreadHandler extends Thread{
                             case "createroom" -> createRoom(clientInputData.get("roomid").toString()); //done
 
                             //check join room
-                            case "joinroom" -> {
-                                String roomID = clientInputData.get("roomid").toString();
-                                joinRoom(roomID);
-                            }
+                            case "joinroom" -> joinRoom(clientInputData.get("roomid").toString());
 
                             //check move join
                             case "movejoin" -> {
@@ -806,10 +808,7 @@ public class ClientThreadHandler extends Thread{
                             }
 
                             //check message
-                            case "message" -> {
-                                String content = clientInputData.get("content").toString();
-                                message(content);
-                            }
+                            case "message" -> message(clientInputData.get("content").toString()); //done
 
                             //check quit
                             case "quit" -> {
