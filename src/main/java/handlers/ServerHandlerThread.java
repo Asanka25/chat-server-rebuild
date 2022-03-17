@@ -239,7 +239,7 @@ public class ServerHandlerThread extends Thread {
                         Object lock = clientThreadHandler.getLock();
 
                         synchronized (lock) {
-                            clientThreadHandler.setRoomsListTemp(roomIDList);
+                            clientThreadHandler.setRoomsList(roomIDList);
                             lock.notifyAll();
                         }
                     } else if (j_object.get("type").equals("deleterequest")) {

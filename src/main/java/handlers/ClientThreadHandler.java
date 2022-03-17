@@ -38,7 +38,7 @@ public class ClientThreadHandler extends Thread{
     private String approvedJoinRoomServerHostAddress;
     private String approvedJoinRoomServerPort;
 
-    private List<String> roomsListTemp;
+    private List<String> roomsList;
 
     final Object lock;
 
@@ -75,8 +75,8 @@ public class ClientThreadHandler extends Thread{
         this.approvedJoinRoomServerPort = approvedJoinRoomServerPort;
     }
 
-    public void setRoomsListTemp(List<String> roomsListTemp) {
-        this.roomsListTemp = roomsListTemp;
+    public void setRoomsList(List<String> roomsList) {
+        this.roomsList = roomsList;
     }
 
     public Object getLock() {
@@ -221,7 +221,7 @@ public class ClientThreadHandler extends Thread{
     //list
     private void list() throws IOException, InterruptedException {
         //reset Temp room list
-        roomsListTemp = null;
+        roomsList = null;
 
         while (!LeaderServices.getInstance().isLeaderElected()) {
             Thread.sleep(1000);
@@ -229,29 +229,30 @@ public class ClientThreadHandler extends Thread{
 
         // if self is leader get list direct from leader state
         if (LeaderServices.getInstance().isLeader()) {
-            roomsListTemp = LeaderServices.getInstance().getRoomIDList();
+            roomsList = LeaderServices.getInstance().getRoomIDList();
         }
         else { // send list request to leader
-            sendToLeader(
-                    ServerMessage.getListRequest(
-                            client.getClientID(),
-                            String.valueOf(this.getId()),
-                            String.valueOf(CurrentServer.getInstance().getSelfID()))
-            );
+            JSONObject request = new JSONObject();
+            request.put("type", "listrequest");
+            request.put("sender", CurrentServer.getInstance().getSelfID());
+            request.put("clientid", client.getClientID());
+            request.put("threadid", this.getId());
+
+            sendToLeader(request);
 
             synchronized (lock) {
-                while (roomsListTemp == null) {
+                while (roomsList == null) {
                     lock.wait(7000);
                 }
             }
         }
 
-        if (roomsListTemp != null) {
-            ClientMessageContext msgCtx = new ClientMessageContext()
-                    .setRoomsList(roomsListTemp);
+        if (roomsList != null) {
+            JSONObject message = new JSONObject();
+            message.put("type", "roomlist");
+            message.put("rooms", roomsList);
 
-            System.out.println("INFO : Recieved rooms in the system :" + roomsListTemp);
-            messageSend(null, msgCtx.setMessageType(CLIENT_MSG_TYPE.LIST));
+            send(message, clientSocket);
         }
     }
 
@@ -763,7 +764,7 @@ public class ClientThreadHandler extends Thread{
                             }
 
                             //check list
-                            case "list" -> {
+                            case "list" -> { //done
                                 list();
                             }
 
