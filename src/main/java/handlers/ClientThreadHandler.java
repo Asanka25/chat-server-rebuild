@@ -21,6 +21,7 @@ import java.io.InputStreamReader;
 import java.net.Socket;
 import java.net.SocketException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -87,10 +88,7 @@ public class ClientThreadHandler extends Thread{
     //format message before sending it to client
     private void messageSend(ArrayList<Socket> socketList, ClientMessageContext msgCtx) throws IOException {
         JSONObject sendToClient = new JSONObject();
-        if (msgCtx.messageType.equals(ClientMessageContext.CLIENT_MSG_TYPE.NEW_ID)) {
-            sendToClient = ClientMessage.getApprovalNewID(msgCtx.isNewClientIdApproved);
-            sendClient(sendToClient,clientSocket);
-        } else if (msgCtx.messageType.equals(CLIENT_MSG_TYPE.JOIN_ROOM)) {
+        if (msgCtx.messageType.equals(CLIENT_MSG_TYPE.JOIN_ROOM)) {
             sendToClient = ClientMessage.getJoinRoom(msgCtx.clientID, msgCtx.formerRoomID, msgCtx.roomID);
             if (socketList != null) sendBroadcast(sendToClient, socketList);
         } else if (msgCtx.messageType.equals(CLIENT_MSG_TYPE.ROUTE)) {
@@ -102,24 +100,12 @@ public class ClientThreadHandler extends Thread{
             //TODO: do the coherent functions like room change broadcast in same line
             //if (socketList != null) sendBroadcast(sendToClient, socketList);
         }
-        else if (msgCtx.messageType.equals(CLIENT_MSG_TYPE.CREATE_ROOM)) {
-            sendToClient = ClientMessage.getCreateRoom(msgCtx.roomID, msgCtx.isNewRoomIdApproved);
-            sendClient(sendToClient,clientSocket);
-        } else if (msgCtx.messageType.equals(CLIENT_MSG_TYPE.BROADCAST_JOIN_ROOM)) {
+        else if (msgCtx.messageType.equals(CLIENT_MSG_TYPE.BROADCAST_JOIN_ROOM)) {
             sendToClient = ClientMessage.getCreateRoomChange(msgCtx.clientID, msgCtx.formerRoomID, msgCtx.roomID);
             sendBroadcast(sendToClient, socketList);
-        } else if (msgCtx.messageType.equals(CLIENT_MSG_TYPE.WHO)) {
-            sendToClient = ClientMessage.getWho(msgCtx.roomID, msgCtx.participantsList, msgCtx.clientID);//owner
-            sendClient(sendToClient,clientSocket);
-        } else if (msgCtx.messageType.equals(CLIENT_MSG_TYPE.LIST)) {
-            sendToClient = ClientMessage.getList(msgCtx.roomsList);
-            sendClient(sendToClient,clientSocket);
         } else if (msgCtx.messageType.equals(CLIENT_MSG_TYPE.DELETE_ROOM)) {
             sendToClient = ClientMessage.getDeleteRoom(msgCtx.roomID, msgCtx.isDeleteRoomApproved);
             sendClient(sendToClient,clientSocket);
-        } else if (msgCtx.messageType.equals(CLIENT_MSG_TYPE.MESSAGE)) {
-            sendToClient = ClientMessage.getMessage(msgCtx.clientID,msgCtx.body);
-            sendBroadcast(sendToClient, socketList);
         }
     }
 
@@ -619,7 +605,7 @@ public class ClientThreadHandler extends Thread{
     //Delete room
     private void deleteRoom(String roomID) throws IOException, InterruptedException {
 
-        String mainHallRoomID = CurrentServer.getInstance().getMainHall().getRoomID();
+        String mainHallID = CurrentServer.getInstance().getMainHall().getRoomID();
 
         if (CurrentServer.getInstance().getRoomMap().containsKey(roomID)) {
             //TODO : check sync
@@ -627,34 +613,42 @@ public class ClientThreadHandler extends Thread{
             if (room.getOwnerIdentity().equals(client.getClientID())) {
 
                 // clients in deleted room
-                ConcurrentHashMap<String, Client> formerClientList = CurrentServer.getInstance().getRoomMap()
-                        .get(roomID).getParticipantsMap();
+                ConcurrentHashMap<String, Client> formerClients = CurrentServer.getInstance().getRoomMap().get(roomID).getParticipantsMap();
                 // former clients in main hall
-                ConcurrentHashMap<String, Client> mainHallClientList = CurrentServer.getInstance().getRoomMap()
-                        .get(mainHallRoomID).getParticipantsMap();
-                mainHallClientList.putAll(formerClientList);
+                Collection<Client> mainHallClients = CurrentServer.getInstance().getRoomMap().get(mainHallID).getParticipantsMap().values();
 
                 ArrayList<Socket> socketList = new ArrayList<>();
-                for (String each : mainHallClientList.keySet()){
-                    socketList.add(mainHallClientList.get(each).getSocket());
-                }
+
+                formerClients.values().forEach((i) -> {
+                    socketList.add(i.getSocket());
+                });
+
+                mainHallClients.forEach((i) -> {
+                    socketList.add(i.getSocket());
+                });
 
                 CurrentServer.getInstance().getRoomMap().remove(roomID);
-                client.setRoomOwner( false );
+                client.setRoomOwner(false);
 
                 // broadcast roomchange message to all clients in deleted room and former clients in main hall
-                for(String client:formerClientList.keySet()){
-                    String clientID = formerClientList.get(client).getClientID();
-                    formerClientList.get(client).setRoomID(mainHallRoomID);
-                    CurrentServer.getInstance().getRoomMap().get(mainHallRoomID).addParticipants(formerClientList.get(client));
+                formerClients.forEach((k,v) -> {
+                    v.setRoomID(mainHallID);
+                    CurrentServer.getInstance().getRoomMap().get(mainHallID).addParticipants(v);
 
-                    ClientMessageContext msgCtx = new ClientMessageContext()
-                            .setClientID(clientID)
-                            .setRoomID(mainHallRoomID)
-                            .setFormerRoomID(roomID);
+                    JSONObject message = new JSONObject();
+                    message.put("type", "roomchange");
+                    message.put("identity", k);
+                    message.put("former", roomID);
+                    message.put("roomid", mainHallID);
 
-                    messageSend(socketList, msgCtx.setMessageType(CLIENT_MSG_TYPE.BROADCAST_JOIN_ROOM));
-                }
+                    socketList.forEach((i) -> {
+                        try {
+                            send(message, i);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    });
+                });
 
                 ClientMessageContext msgCtx = new ClientMessageContext()
                         .setRoomID(roomID)
@@ -667,31 +661,41 @@ public class ClientThreadHandler extends Thread{
 
                 //if self is leader update leader state directly
                 if (LeaderServices.getInstance().isLeader()) {
-                    LeaderServices.getInstance().removeRoom(roomID, mainHallRoomID, client.getClientID());
+                    LeaderServices.getInstance().removeRoom(roomID, mainHallID, client.getClientID());
                 } else {
                     //update leader server
-                    sendToLeader(
-                            ServerMessage.getDeleteRoomRequest(client.getClientID(), roomID, mainHallRoomID)
-                    );
+                    JSONObject request = new JSONObject();
+                    request.put("type", "deleterequest");
+                    request.put("owner", client.getClientID());
+                    request.put("roomid", roomID);
+                    request.put("mainhall", mainHallID);
+
+                    sendToLeader(request);
                 }
 
-                System.out.println("INFO : room [" + roomID + "] was deleted by : " + client.getClientID());
+                System.out.println(roomID + " room is deleted");
 
-            } else {
-                ClientMessageContext msgCtx = new ClientMessageContext()
-                        .setRoomID(roomID)
-                        .setIsDeleteRoomApproved("false");
-
-                messageSend(null, msgCtx.setMessageType(CLIENT_MSG_TYPE.DELETE_ROOM));
-                System.out.println("WARN : Requesting client [" + client.getClientID() + "] does not own the room ID [" + roomID + "]");
             }
-        } else {
-            ClientMessageContext msgCtx = new ClientMessageContext()
-                    .setRoomID(roomID)
-                    .setIsDeleteRoomApproved("false");
+            else {
+                JSONObject message = new JSONObject();
+                message.put("type", "deleteroom");
+                message.put("roomid", roomID);
+                message.put("approved", "false");
 
-            messageSend(null, msgCtx.setMessageType(CLIENT_MSG_TYPE.DELETE_ROOM));
-            System.out.println("WARN : Received room ID [" + roomID + "] does not exist");
+                send(message,clientSocket);
+
+                System.out.println("Requesting client is not the owner of the room " + roomID);
+            }
+        }
+        else {
+            JSONObject message = new JSONObject();
+            message.put("type", "deleteroom");
+            message.put("roomid", roomID);
+            message.put("approved", "false");
+
+            send(message,clientSocket);
+
+            System.out.println("Room ID " + roomID + " does not exist");
         }
     }
 
@@ -768,61 +772,47 @@ public class ClientThreadHandler extends Thread{
                 try {
                     String clientInputLine = in.readLine();
 
-                    if (clientInputLine==null){
-                        continue;
-                    }
-
                     //convert received message to json object
                     JSONParser jsonParser = new JSONParser();
                     JSONObject clientInputData = (JSONObject) jsonParser.parse(clientInputLine);
 
-                    if (clientInputData.containsKey("type")) {
-                        switch (clientInputData.get("type").toString()) {
-                            //check new identity format
-                            case "newidentity" -> newIdentity(clientInputData.get("identity").toString()); //done
+                    switch (clientInputData.get("type").toString()) {
+                        //check new identity format
+                        case "newidentity" -> newIdentity(clientInputData.get("identity").toString()); //done
 
-                            //check list
-                            case "list" ->  list();//done
+                        //check list
+                        case "list" -> list();//done
 
-                            //check who
-                            case "who" -> who(); //doing
+                        //check who
+                        case "who" -> who(); //doing
 
-                            //check create room
-                            case "createroom" -> createRoom(clientInputData.get("roomid").toString()); //done
+                        //check create room
+                        case "createroom" -> createRoom(clientInputData.get("roomid").toString()); //done
 
-                            //check join room
-                            case "joinroom" -> joinRoom(clientInputData.get("roomid").toString());
+                        //check join room
+                        case "joinroom" -> joinRoom(clientInputData.get("roomid").toString());
 
-                            //check move join
-                            case "movejoin" -> {
-                                String roomID = clientInputData.get("roomid").toString();
-                                String formerRoomID = clientInputData.get("former").toString();
-                                String clientID = clientInputData.get("identity").toString();
-                                moveJoin(roomID, formerRoomID, clientID);
-                            }
+                        //check move join
+                        case "movejoin" -> {
+                            String roomID = clientInputData.get("roomid").toString();
+                            String formerRoomID = clientInputData.get("former").toString();
+                            String clientID = clientInputData.get("identity").toString();
+                            moveJoin(roomID, formerRoomID, clientID);
+                        }
 
-                            //check delete room
-                            case "deleteroom" -> {
-                                String roomID = clientInputData.get("roomid").toString();
-                                deleteRoom(roomID);
-                            }
+                        //check delete room
+                        case "deleteroom" -> deleteRoom(clientInputData.get("roomid").toString()); //doing
 
-                            //check message
-                            case "message" -> message(clientInputData.get("content").toString()); //done
+                        //check message
+                        case "message" -> message(clientInputData.get("content").toString()); //done
 
-                            //check quit
-                            case "quit" -> {
-                                quit();
-                            }
-
-                            default -> System.out.println("Invalid input!");
+                        //check quit
+                        case "quit" -> {
+                            quit();
                         }
                     }
-                    else {
-                        System.out.println("Invalid input!");
-                    }
-
-                } catch (ParseException | InterruptedException | SocketException e) {
+                }
+                catch (ParseException | InterruptedException | SocketException e) {
                     e.printStackTrace();
                     quit();
                 }
