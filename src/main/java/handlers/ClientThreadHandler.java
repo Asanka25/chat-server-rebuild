@@ -1,9 +1,6 @@
 package handlers; //ClientHandlerThread
 
-import messaging.ClientMessage;
 import messaging.ClientMessageContext;
-import messaging.ClientMessageContext.CLIENT_MSG_TYPE;
-import messaging.ServerMessage;
 import models.Client;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -19,7 +16,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.Socket;
-import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -43,7 +39,7 @@ public class ClientThreadHandler extends Thread{
 
     final Object lock;
 
-    private boolean quitFlag = false;
+    private boolean boolQuit = false;
 
     public ClientThreadHandler(Socket clientSocket) {
         String serverID = CurrentServer.getInstance().getServerID();
@@ -84,16 +80,6 @@ public class ClientThreadHandler extends Thread{
         return lock;
     }
 
-    //format message before sending it to client
-    private void messageSend(ArrayList<Socket> socketList, ClientMessageContext msgCtx) throws IOException {
-        JSONObject sendToClient = new JSONObject();
-        if (msgCtx.messageType.equals(CLIENT_MSG_TYPE.BROADCAST_JOIN_ROOM)) {
-            sendToClient = ClientMessage.getCreateRoomChange(msgCtx.clientID, msgCtx.formerRoomID, msgCtx.roomID);
-            sendBroadcast(sendToClient, socketList);
-        }
-    }
-
-    //new identity
     private void newIdentity(String clientID) {
         try {
             if (Utils.isValidIdentity(clientID)) {
@@ -191,7 +177,6 @@ public class ClientThreadHandler extends Thread{
         }
     }
 
-    //list
     private void list() {
         try {
             //reset roomsList
@@ -233,7 +218,6 @@ public class ClientThreadHandler extends Thread{
         }
     }
 
-    //who
     private void who() {
         try {
             String roomID = client.getRoomID();
@@ -257,7 +241,6 @@ public class ClientThreadHandler extends Thread{
         }
     }
 
-    //create room
     private void createRoom(String newRoomID) {
         try {
             if (!Utils.isValidIdentity(newRoomID)) {
@@ -383,7 +366,6 @@ public class ClientThreadHandler extends Thread{
         }
     }
 
-    //join room
     private void joinRoom(String roomID) {
         try {
             String formerRoomID = client.getRoomID();
@@ -530,7 +512,7 @@ public class ClientThreadHandler extends Thread{
 
                     send(routeMessage, clientSocket);
                     System.out.println("Route Message Sent to Client");
-                    quitFlag = true;
+                    boolQuit = true;
                 } else if (approvedJoinRoom == 0) {
                     // Room not found on system
                     JSONObject message = new JSONObject();
@@ -553,7 +535,6 @@ public class ClientThreadHandler extends Thread{
         }
     }
 
-    //Move join
     private void moveJoin(JSONObject inputData) {
         try {
             String roomID = inputData.get("roomid").toString();
@@ -619,7 +600,6 @@ public class ClientThreadHandler extends Thread{
         }
     }
 
-    //Delete room
     private void deleteRoom(String roomID) {
         try {
             String mainHallID = CurrentServer.getInstance().getMainHall().getRoomID();
@@ -718,48 +698,59 @@ public class ClientThreadHandler extends Thread{
         }
     }
 
-    //quit room
-    private void quit() throws IOException, InterruptedException {
+    private void quit(){
+        try {
+            //delete room if room owner
+            if (client.isRoomOwner()) {
+                deleteRoom(client.getRoomID());
+                System.out.println(client.getRoomID() + " room deleted due to owner quiting");
+            }
 
-        //delete room if room owner
-        if (client.isRoomOwner()){
-            deleteRoom(client.getRoomID());
-            System.out.println("INFO : Deleted room before " + client.getClientID() + " quit");
+            JSONObject quitMessage = new JSONObject();
+            quitMessage.put("type", "roomchange");
+            quitMessage.put("identity", client.getClientID());
+            quitMessage.put("former", client.getRoomID());
+            quitMessage.put("roomid", "");
+
+            Collection<Client> roomClients = CurrentServer.getInstance().getRoomMap().get(client.getRoomID()).getParticipantsMap().values();
+
+            roomClients.forEach((i) -> {
+                try {
+                    send(quitMessage, i.getSocket());
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            });
+
+            //update Local Server
+            CurrentServer.getInstance().removeClient(client.getClientID(), client.getRoomID(), getId());
+
+            // Update global list of Leader
+            // send quit message to leader if self is not leader
+            if (LeaderServices.getInstance().isLeader()) {
+                // Leader is self , removes client from global list
+                LeaderServices.getInstance().removeClient(client.getClientID(), client.getRoomID());
+            } else {
+                JSONObject leaderMessage = new JSONObject();
+                leaderMessage.put("type", "quit");
+                leaderMessage.put("clientid", client.getClientID());
+                leaderMessage.put("former", client.getRoomID());
+
+                sendToLeader(leaderMessage);
+            }
+
+            if (!clientSocket.isClosed()) {
+                clientSocket.close();
+            }
+
+            System.out.println(client.getClientID() + " quit");
+            boolQuit = true;
         }
-
-        //send broadcast with empty target room for quit
-        ConcurrentHashMap<String, Client> formerClientList = CurrentServer.getInstance().getRoomMap().get(client.getRoomID()).getParticipantsMap();
-
-        ArrayList<Socket> socketList = new ArrayList<>();
-        for (String each:formerClientList.keySet()){
-            socketList.add(formerClientList.get(each).getSocket());
+        catch (IOException e) {
+            e.printStackTrace();
         }
-        ClientMessageContext msgCtx = new ClientMessageContext()
-                .setClientID(client.getClientID())
-                .setRoomID("")
-                .setFormerRoomID(client.getRoomID());
-        messageSend(socketList, msgCtx.setMessageType(CLIENT_MSG_TYPE.BROADCAST_JOIN_ROOM));
-
-        //update Local Server
-        CurrentServer.getInstance().removeClient(client.getClientID(), client.getRoomID(), getId());
-
-        // Update global list of Leader
-        // send quit message to leader if self is not leader
-        if( !LeaderServices.getInstance().isLeader() ) {
-            sendToLeader(
-                    ServerMessage.getQuit(client.getClientID(), client.getRoomID())
-            );
-        } else {
-            // Leader is self , removes client from global list
-            LeaderServices.getInstance().removeClient(client.getClientID(), client.getRoomID() );
-        }
-
-        if (!clientSocket.isClosed()) clientSocket.close();
-        quitFlag = true;
-        System.out.println("INFO : " + client.getClientID() + " quit");
     }
 
-    //message
     private void message(String content) {
         String clientID = client.getClientID();
         String roomid = client.getRoomID();
@@ -781,57 +772,38 @@ public class ClientThreadHandler extends Thread{
         });
     }
 
-
     @Override
     public void run() {
         try {
             BufferedReader in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
 
-            while (!quitFlag) {
-                try {
-                    String clientInputLine = in.readLine();
+            while (!boolQuit) {
+                String clientInputLine = in.readLine();
 
-                    //convert received message to json object
-                    JSONParser jsonParser = new JSONParser();
-                    JSONObject clientInputData = (JSONObject) jsonParser.parse(clientInputLine);
+                JSONParser jsonParser = new JSONParser();
+                JSONObject clientInputData = (JSONObject) jsonParser.parse(clientInputLine);
 
-                    switch (clientInputData.get("type").toString()) {
-                        //check new identity format
-                        case "newidentity" -> newIdentity(clientInputData.get("identity").toString()); //done
+                switch (clientInputData.get("type").toString()) {
+                    case "newidentity" -> newIdentity(clientInputData.get("identity").toString());
 
-                        //check list
-                        case "list" -> list();//done
+                    case "list" -> list();
 
-                        //check who
-                        case "who" -> who(); //doing
+                    case "who" -> who();
 
-                        //check create room
-                        case "createroom" -> createRoom(clientInputData.get("roomid").toString()); //done
+                    case "createroom" -> createRoom(clientInputData.get("roomid").toString());
 
-                        //check join room
-                        case "joinroom" -> joinRoom(clientInputData.get("roomid").toString()); //doing
+                    case "joinroom" -> joinRoom(clientInputData.get("roomid").toString());
 
-                        //check move join
-                        case "movejoin" -> moveJoin(clientInputData);
+                    case "movejoin" -> moveJoin(clientInputData);
 
-                        //check delete room
-                        case "deleteroom" -> deleteRoom(clientInputData.get("roomid").toString()); //done
+                    case "deleteroom" -> deleteRoom(clientInputData.get("roomid").toString());
 
-                        //check message
-                        case "message" -> message(clientInputData.get("content").toString()); //done
+                    case "message" -> message(clientInputData.get("content").toString());
 
-                        //check quit
-                        case "quit" -> {
-                            quit();
-                        }
-                    }
-                }
-                catch (ParseException | InterruptedException | SocketException e) {
-                    e.printStackTrace();
-                    quit();
+                    case "quit" -> quit();
                 }
             }
-        } catch (IOException | InterruptedException e) {
+        } catch (IOException | ParseException e) {
             e.printStackTrace();
         }
     }
