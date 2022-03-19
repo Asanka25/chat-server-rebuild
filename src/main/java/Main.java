@@ -29,51 +29,25 @@ public class Main {
 //        System.out.println("LOG  : ARG[0] = " + args[0] + " ARG[1] = '" + args[1] + "'");
         CurrentServer.getInstance().initializeWithConfigs("s3", "/home/dilanka_rathnasiri/Documents/chat-server-rebuild/server_conf.txt");
 
-        System.out.println("LOG  : ------server started------");
-
         try {
             // throw exception if invalid server id provided
             if( CurrentServer.getInstance().getServerAddress() == null ) {
                 throw new IllegalArgumentException();
             }
 
-            /**
-             Coordination socket
-             **/
-            // server socket for coordination
-            ServerSocket serverCoordinationSocket = new ServerSocket();
-
-            // bind SocketAddress with inetAddress and port
+            //Coordination server socket
+            ServerSocket coordinationServerSocket = new ServerSocket();
             SocketAddress endPointCoordination = new InetSocketAddress(
-                    "0.0.0.0",//ServerState.getInstance().getServerAddress()
+                    CurrentServer.getInstance().getServerAddress(),
                     CurrentServer.getInstance().getCoordinationPort()
             );
-            serverCoordinationSocket.bind( endPointCoordination );
-            System.out.println( serverCoordinationSocket.getLocalSocketAddress() );
-            System.out.println( "LOG  : TCP Server waiting for coordination on port " +
-                    serverCoordinationSocket.getLocalPort() ); // port open for coordination
+            coordinationServerSocket.bind( endPointCoordination );
+            System.out.println( coordinationServerSocket.getLocalSocketAddress() );
 
-            /**
-             Client socket
-             **/
-            // server socket for clients
-            ServerSocket serverClientsSocket = new ServerSocket();
+            System.out.println("Coordination server socket address: "+ CurrentServer.getInstance().getServerAddress());
+            System.out.println("Coordination server socket port: " + CurrentServer.getInstance().getCoordinationPort());
 
-            // bind SocketAddress with inetAddress and port
-            SocketAddress endPointClient = new InetSocketAddress(
-                    "0.0.0.0",//ServerState.getInstance().getServerAddress()
-                    CurrentServer.getInstance().getClientsPort()
-            );
-            serverClientsSocket.bind(endPointClient);
-            System.out.println(serverClientsSocket.getLocalSocketAddress());
-            System.out.println("LOG  : TCP Server waiting for clients on port "+
-                    serverClientsSocket.getLocalPort()); // port open for clients
-
-            /**
-             Handle coordination
-             **/
-            ServerHandlerThread serverHandlerThread = new ServerHandlerThread( serverCoordinationSocket );
-            // starting the thread
+            ServerHandlerThread serverHandlerThread = new ServerHandlerThread(coordinationServerSocket);
             serverHandlerThread.start();
 
             /**
@@ -97,25 +71,25 @@ public class Main {
             }
 
 
-            /**
-             Handle clients
-             **/
+            // Client connection server socket
+            ServerSocket clientServerSocket = new ServerSocket();
+            SocketAddress endPointClient = new InetSocketAddress(
+                    CurrentServer.getInstance().getServerAddress(),
+                    CurrentServer.getInstance().getClientsPort()
+            );
+            clientServerSocket.bind(endPointClient);
+
+            System.out.println("Client connection server socket address: "+ CurrentServer.getInstance().getServerAddress());
+            System.out.println("Client connection server socket port: " + CurrentServer.getInstance().getClientsPort());
+
             while (true) {
-                ClientThreadHandler clientThreadHandler = new ClientThreadHandler(serverClientsSocket.accept());
-                // starting the thread
+                ClientThreadHandler clientThreadHandler = new ClientThreadHandler(clientServerSocket.accept());
                 CurrentServer.getInstance().addClientHandlerThreadToMap(clientThreadHandler);
                 clientThreadHandler.start();
             }
         }
-        catch( IllegalArgumentException e ) {
-            System.out.println("ERROR : invalid server ID");
-        }
-        catch ( IndexOutOfBoundsException e) {
-            System.out.println("ERROR : server arguments not provided");
+        catch( IllegalArgumentException | IOException | IndexOutOfBoundsException e ) {
             e.printStackTrace();
-        }
-        catch ( IOException e) {
-            System.out.println("ERROR : occurred in main " + Arrays.toString(e.getStackTrace()));
         }
     }
 

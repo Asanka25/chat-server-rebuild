@@ -1,6 +1,5 @@
 package handlers; //ClientHandlerThread
 
-import messaging.ClientMessageContext;
 import models.Client;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -20,9 +19,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-
-import static services.CoordinationServices.*;
-import static services.CoordinationServices.send;
+import static util.Utils.send;
+import static util.Utils.sendLeader;
 
 public class ClientThreadHandler extends Thread{
 
@@ -101,7 +99,7 @@ public class ClientThreadHandler extends Thread{
                         requestMessage.put("sender", String.valueOf(CurrentServer.getInstance().getSelfID()));
                         requestMessage.put("threadid", String.valueOf(this.getId()));
 
-                        sendToLeader(requestMessage); //todo: check leader clientidapprovalrequest in server handler later
+                        sendLeader(requestMessage); //todo: check leader clientidapprovalrequest in server handler later
 
                         System.out.println("Client ID '" + clientID + "' sent to leader for approval");
                     } catch (IOException e) {
@@ -191,7 +189,7 @@ public class ClientThreadHandler extends Thread{
                 request.put("clientid", client.getClientID());
                 request.put("threadid", this.getId());
 
-                sendToLeader(request);
+                sendLeader(request);
 
                 synchronized (lock) {
                     while (roomsList == null) {
@@ -281,7 +279,7 @@ public class ClientThreadHandler extends Thread{
                         requestMessage.put("threadid", String.valueOf(this.getId()));
 
 
-                        sendToLeader(requestMessage); //todo: check leader roomcreateapprovalrequest in server handler later
+                        sendLeader(requestMessage); //todo: check leader roomcreateapprovalrequest in server handler later
 
                         System.out.println("Room ID '" + newRoomID + "' sent to leader for room creation approval");
                     } catch (Exception e) {
@@ -429,7 +427,7 @@ public class ClientThreadHandler extends Thread{
                     request.put("isLocalRoomChange", "true");
 
                     //update leader server
-                    sendToLeader(request);
+                    sendLeader(request);
                 }
 
             }
@@ -465,7 +463,7 @@ public class ClientThreadHandler extends Thread{
                     request.put("threadid", String.valueOf(this.getId()));
                     request.put("isLocalRoomChange", "false");
 
-                    sendToLeader(request);
+                    sendLeader(request);
 
                     synchronized (lock) {
                         while (approvedJoinRoom == -1) {
@@ -587,7 +585,7 @@ public class ClientThreadHandler extends Thread{
                 ack.put("threadid", String.valueOf(this.getId()));
 
                 //update leader server
-                sendToLeader(ack);
+                sendLeader(ack);
             }
         }
         catch (IOException | InterruptedException e) {
@@ -642,10 +640,6 @@ public class ClientThreadHandler extends Thread{
                         });
                     });
 
-                    ClientMessageContext msgCtx = new ClientMessageContext()
-                            .setRoomID(roomID)
-                            .setIsDeleteRoomApproved("true");
-
                     //TODO : check sync
                     while (!LeaderServices.getInstance().isLeaderElected()) {
                         Thread.sleep(1000);
@@ -662,7 +656,7 @@ public class ClientThreadHandler extends Thread{
                         request.put("roomid", roomID);
                         request.put("mainhall", mainHallID);
 
-                        sendToLeader(request);
+                        sendLeader(request);
                     }
 
                     System.out.println(roomID + " room is deleted");
@@ -731,7 +725,7 @@ public class ClientThreadHandler extends Thread{
                 leaderMessage.put("clientid", client.getClientID());
                 leaderMessage.put("former", client.getRoomID());
 
-                sendToLeader(leaderMessage);
+                sendLeader(leaderMessage);
             }
 
             if (!clientSocket.isClosed()) {

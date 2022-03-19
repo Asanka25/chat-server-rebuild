@@ -10,6 +10,8 @@ import services.LeaderServices;
 import java.io.IOException;
 import java.util.List;
 
+import static util.Utils.sendLeader;
+
 public class FastBully implements Runnable {
     public String operation;
     public String reqType;
@@ -269,7 +271,7 @@ public class FastBully implements Runnable {
                 // send local client list and chat room list to leader
                 try
                 {
-                    CoordinationServices.sendToLeader(
+                    sendLeader(
                             ServerMessage.getLeaderStateUpdate(
                                     CurrentServer.getInstance().getClientIdList(),
                                     CurrentServer.getInstance().getChatRoomList()
