@@ -47,11 +47,6 @@ public class ClientThreadHandler extends Thread{
         this.lock = new Object();
     }
 
-    public String getClientId()
-    {
-        return client.getClientID();
-    }
-
     public void setApprovedClientID( int approvedClientID ) {
         this.approvedClientID = approvedClientID;
     }
